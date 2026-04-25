@@ -1,14 +1,14 @@
 # ACP Harness Hub Connector Platform
 
-A comprehensive system designed to proactively connect developers with the ACP Harness Hub, enabling collaborative, traceable building workflows.
+A comprehensive system designed to proactively connect developers with the ACP Harness Hub, enabling collaborative, traceable building workflows with **built-in reward hacking mitigation**.
 
 ## 🚀 Goal
 
-To create a system that seamlessly connects developers with the ACP Harness Hub, allowing for proactive integration of code, PRs, and development tasks into the Harness Hub workflow.
+To create a system that seamlessly connects developers with the ACP Harness Hub, allowing for proactive integration of code, PRs, and development tasks into the Harness Hub workflow—with enterprise-grade safety measures to prevent reward hacking.
 
 ## 🛠️ Core Components & Skills
 
-The platform is built around three core skills designed to orchestrate the connection and execution steps:
+The platform is built around four core skills designed to orchestrate the connection and execution steps:
 
 ### 1. **`acp-connector` Skill**
 - **Purpose:** Direct, secure communication with the ACP Harness Hub API.
@@ -24,6 +24,11 @@ The platform is built around three core skills designed to orchestrate the conne
 - **Purpose:** The central logic layer that chains the connection and execution steps.
 - **Functionality:** Takes a developer request, sequences calls to `acp-connector` and `github-sync`, handles error routing, and manages the state of the build flow.
 - **Location:** [taskflow-orchestrator/](taskflow-orchestrator/)
+
+### 4. **`reward-validator` Skill** ⭐ NEW
+- **Purpose:** Detect and mitigate reward hacking in job execution.
+- **Functionality:** Validates that completed tasks genuinely fulfill intended objectives using iterative testing, adversarial validation, behavioral robustness checks, and ethical compliance verification.
+- **Location:** [reward-validator/](reward-validator/)
 
 ## 🔄 Workflow Example: Proactive Connection
 
