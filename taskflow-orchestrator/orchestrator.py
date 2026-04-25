@@ -13,6 +13,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from acp_connector import ACPConnector
 from github_sync import GitHubSync
+from reward_validator import RewardValidator, JobResult
 
 
 class WorkflowState(str, Enum):
@@ -66,6 +67,8 @@ class TaskflowOrchestrator:
         acp_api_key: Optional[str] = None,
         github_token: Optional[str] = None,
         log_level: str = "INFO",
+        enable_reward_validation: bool = True,
+        validation_threshold: float = 0.85,
     ):
         """
         Initialize the Taskflow Orchestrator.
@@ -74,12 +77,18 @@ class TaskflowOrchestrator:
             acp_api_key: ACP API key. If not provided, reads from HARNESS_API_KEY.
             github_token: GitHub token. If not provided, reads from GITHUB_TOKEN.
             log_level: Logging level.
+            enable_reward_validation: Enable reward hacking mitigation.
+            validation_threshold: Reward validation safety threshold (0-1).
         """
         self.logger = logging.getLogger(__name__)
         self.logger.setLevel(getattr(logging, log_level))
 
         self.connector = ACPConnector(api_key=acp_api_key)
         self.syncer = GitHubSync(github_token=github_token)
+        self.reward_validator = RewardValidator(
+            validation_threshold=validation_threshold, log_level=log_level
+        )
+        self.enable_reward_validation = enable_reward_validation
 
         # In-memory workflow state tracking
         self.workflows: Dict[str, WorkflowStatus] = {}
@@ -237,6 +246,80 @@ class TaskflowOrchestrator:
 
         self.logger.info(f"Retrying workflow {workflow_id}")
         return self.process_pr(repo_owner, repo_name, pr_number)
+
+    def validate_job_rewards(
+        self,
+        job_id: str,
+        task_goal: str,
+        completed_actions: list,
+        final_state: dict,
+        metrics: dict,
+        execution_time: float,
+    ) -> Dict[str, Any]:
+        """
+        Validate rewards for a completed job using reward hacking mitigation.
+
+        Args:
+            job_id: The job ID
+            task_goal: The original task goal
+            completed_actions: List of completed actions
+            final_state: Final job state
+            metrics: Job metrics
+            execution_time: Total execution time
+
+        Returns:
+            Dict with validation results and safety assessment
+        """
+        if not self.enable_reward_validation:
+            self.logger.debug("Reward validation disabled")
+            return {"validation_enabled": False, "approved": True}
+
+        self.logger.info(f"Validating rewards for job {job_id}")
+
+        try:
+            # Create job result for validation
+            job_result = JobResult(
+                job_id=job_id,
+                task_goal=task_goal,
+                completed_actions=completed_actions,
+                final_state=final_state,
+                metrics=metrics,
+                execution_time=execution_time,
+            )
+
+            # Run validation
+            validation_result = self.reward_validator.validate_reward(
+                job_result=job_result, reward_signals=metrics
+            )
+
+            # Log results
+            self.logger.info(
+                f"Job {job_id} validation: {validation_result.risk_level} "
+                f"(safety: {validation_result.safety_score:.2f})"
+            )
+
+            if validation_result.warnings:
+                self.logger.warning(
+                    f"Warnings for {job_id}: {', '.join(validation_result.warnings)}"
+                )
+
+            return {
+                "validation_enabled": True,
+                "approved": validation_result.is_safe,
+                "safety_score": validation_result.safety_score,
+                "risk_level": validation_result.risk_level,
+                "warnings": validation_result.warnings,
+                "recommendations": validation_result.recommendations,
+                "detailed_analysis": validation_result.detailed_analysis,
+            }
+
+        except Exception as e:
+            self.logger.error(f"Reward validation failed for {job_id}: {str(e)}")
+            return {
+                "validation_enabled": True,
+                "approved": False,
+                "error": str(e),
+            }
 
     def _update_workflow_state(
         self,
